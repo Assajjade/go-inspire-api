@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"sync" 
+	"os"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,7 +28,6 @@ type InspirationResponse struct {
 	ImageURL string `json:"image_url"`
 }
 
-
 func main() {
 	r := gin.Default()
 
@@ -36,22 +36,31 @@ func main() {
 		apiV1.GET("/inspire-me", getInspirationHandler)
 	}
 
-	log.Println("Starting server on port 8080...")
-	r.Run(":8080") 
+	port := os.Getenv("PORT")
+
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Starting server on port %s...", port)
+
+	log.Println("Starting server on port", port)
+
+	r.Run(":" + port)
 }
 
 func getInspirationHandler(c *gin.Context) {
 
-	var wg sync.WaitGroup 
-	wg.Add(2) 
+	var wg sync.WaitGroup
+	wg.Add(2)
 
 	quoteChan := make(chan DummyQuote, 1)
 	imageChan := make(chan string, 1)
-	errChan := make(chan error, 2) 
+	errChan := make(chan error, 2)
 
 	go func() {
-		defer wg.Done() 
-		
+		defer wg.Done()
+
 		resp, err := http.Get(QUOTE_URL)
 		if err != nil {
 			errChan <- err
@@ -64,12 +73,12 @@ func getInspirationHandler(c *gin.Context) {
 			errChan <- err
 			return
 		}
-		
+
 		quoteChan <- quoteData
 	}()
 
 	go func() {
-		defer wg.Done() 
+		defer wg.Done()
 
 		resp, err := http.Get(IMAGE_URL)
 		if err != nil {
@@ -79,12 +88,12 @@ func getInspirationHandler(c *gin.Context) {
 		defer resp.Body.Close()
 
 		finalImageURL := resp.Request.URL.String()
-		
+
 		imageChan <- finalImageURL
 	}()
 
-	wg.Wait()      
-	close(errChan) 
+	wg.Wait()
+	close(errChan)
 
 	for err := range errChan {
 		if err != nil {
@@ -105,7 +114,6 @@ func getInspirationHandler(c *gin.Context) {
 			Author: quote.Author,
 		},
 		ImageURL: imageURL,
-		
 	}
 
 	c.JSON(http.StatusOK, response)
